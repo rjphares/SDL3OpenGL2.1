@@ -7,28 +7,41 @@
         glVertex2f(x1, y1); \
         glVertex2f(x2, y2); \
     glEnd();
+    
+static GLubyte frontIndices[] = {4,5,6,7};
+static GLubyte rightIndices[] = {1,2,6,5};
+static GLubyte bottomIndices[] = {0,1,5,4};
+static GLubyte backIndices[] = {0,3,2, 1};
+static GLubyte leftIndices[] = {0,4,7,3};
+static GLubyte topIndices[] = {2,3,7,6};
 
-    static GLint vertices[] = {
-        0, 25,
-        100, 325,
-        175, 25, 
-        175, 390,
-        0, 25,
-        325, 390};
+//make 3d vertices for cube
+static GLfloat vertices[] = {
+    -1.0f, -1.0f, -1.0f, // 0
+     1.0f, -1.0f, -1.0f, // 1
+     1.0f,  1.0f, -1.0f, // 2
+    -1.0f,  1.0f, -1.0f, // 3
+    -1.0f, -1.0f,  1.0f, // 4
+     1.0f, -1.0f,  1.0f, // 5
+     1.0f,  1.0f,  1.0f, // 6
+    -1.0f,  1.0f,  1.0f  // 7
+};
+static GLfloat colors[] = {
+    1.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f,
+    0.0f, 0.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f
+};
 
-    static GLfloat colors[] = {
-        1.0, 0.2, 0.2,
-        0.2, 0.2, 1.0,
-        0.8, 1.0, 0.2,
-        0.75, 0.75, 0.75,
-        0.35, 0.35, 0.35,
-        0.5, 0.5, 0.5};
-
-void reshape(int width, int height) {
-    glViewport(0, 0, width, height);
-    glLoadIdentity();
-    glOrtho(0.0, width, 0.0, height, -1.0, 1.0);
-}
+// void reshape(int width, int height) {
+//     glViewport(0, 0, width, height);
+//     glLoadIdentity();
+//     glOrtho(0.0, width, 0.0, height, -1.0, 1.0);
+// }
 
 int main() {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -36,7 +49,6 @@ int main() {
         return 1;
     }
 
-    // int w = 96*3, h = 96;
     int w = 400, h = 400;
     SDL_Window* window = SDL_CreateWindow("OpenGL 2.1 + SDL3 (C)",
                                           w, h,
@@ -58,9 +70,19 @@ int main() {
 
     printf("OpenGL version: %s\n", glGetString(GL_VERSION));
 
-    // Set the initial orthographic projection to match the window size
-    reshape(w, h);
 
+    // Set the initial orthographic projection to match the window size
+    // reshape(w, h);
+
+
+    // make viewport -2 to 2
+    glViewport(0, 0, w, h);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-2.0, 2.0, -2.0, 2.0, -10.0, 10.0);
+    glMatrixMode(GL_MODELVIEW);
+
+    
     // if (glUniformMatrix4x3fv) {
     //     printf("glUniformMatrix4x3fv is available. OpenGL 2.1 is supported.\n");
     // } else {
@@ -75,37 +97,44 @@ int main() {
 
     int running = 1;
     SDL_Event e;
+    float angle = 0.0f;
     while (running) {
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT) {
                 running = 0;
             }
-            if (e.type == SDL_EVENT_WINDOW_RESIZED) {
-                w = e.window.data1;
-                h = e.window.data2;
-                reshape(w, h);
-            }
+            // if (e.type == SDL_EVENT_WINDOW_RESIZED) {
+            //     w = e.window.data1;
+            //     h = e.window.data2;
+            //     reshape(w, h);
+            // }
             if (e.type == SDL_EVENT_KEY_DOWN) {
                 if (e.key.key == SDLK_ESCAPE) {
                     running = 0;
                 }
             }
         }
-        glClear(GL_COLOR_BUFFER_BIT);
-        glColor3f(0.0f, 0.0f, 0.0f);
-        
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+        //glTranslatef(-1.0f, 0.0f, 0.0f); // Move cube into view
+        glRotatef(angle, 1.0f, 1.0f, 0.0f); // Rotate cube
+
         glEnableClientState(GL_VERTEX_ARRAY);
-        glEnableClientState(GL_COLOR_ARRAY);
+        glVertexPointer(3, GL_FLOAT, 0, vertices);
 
-        glVertexPointer(2, GL_INT, 0, vertices);
-        glColorPointer(3, GL_FLOAT, 0, colors);
+        glDrawElements(GL_QUADS, 4, GL_UNSIGNED_BYTE, frontIndices);
+        glDrawElements(GL_QUADS, 4, GL_UNSIGNED_BYTE, rightIndices);
+        glDrawElements(GL_QUADS, 4, GL_UNSIGNED_BYTE, bottomIndices);
+        glDrawElements(GL_QUADS, 4, GL_UNSIGNED_BYTE, backIndices);
+        glDrawElements(GL_QUADS, 4, GL_UNSIGNED_BYTE, leftIndices);
+        glDrawElements(GL_QUADS, 4, GL_UNSIGNED_BYTE, topIndices);
 
-        glBegin(GL_TRIANGLES);
-        glArrayElement(2);
-        glArrayElement(3);
-        glArrayElement(5);
-        glEnd();
+        glDisableClientState(GL_VERTEX_ARRAY);
 
+        angle += 1.0f; // Animate rotation
+        
         SDL_GL_SwapWindow(window);
     }
 

@@ -1,10 +1,8 @@
 #include <SDL3/SDL.h>
 #include <glad/glad.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
-// #ifndef M_PI
-// #define M_PI 3.14159265358979323846
-// #endif
 
 #define drawOneLine(x1, y1, x2, y2) \
     glBegin(GL_LINES); \
@@ -12,71 +10,203 @@
         glVertex2f(x2, y2); \
     glEnd();
     
-static GLubyte frontIndices[] = {4,5,6,7};
-static GLubyte rightIndices[] = {1,2,6,5};
-static GLubyte bottomIndices[] = {0,1,5,4};
-static GLubyte backIndices[] = {0,3,2, 1};
-static GLubyte leftIndices[] = {0,4,7,3};
-static GLubyte topIndices[] = {2,3,7,6};
 
-//make 3d vertices for cube
-// static GLfloat vertices[] = {
-//     -1.0f, -1.0f, -1.0f, // 0
-//      1.0f, -1.0f, -1.0f, // 1
-//      1.0f,  1.0f, -1.0f, // 2
-//     -1.0f,  1.0f, -1.0f, // 3
-//     -1.0f, -1.0f,  1.0f, // 4
-//      1.0f, -1.0f,  1.0f, // 5
-//      1.0f,  1.0f,  1.0f, // 6
-//     -1.0f,  1.0f,  1.0f  // 7
-// };
+#define NUM_STARS 300
 
-//make 3d vertices for star
-static GLfloat star[] = {
-     0.0f,  1.0f, 0.0f, // 0
-     1.0f,  1.0f, 0.0f, // 1
-     2.0f,  0.5f, 0.0f, // 2
-     2.0f, -1.0f, 0.0f, // 3
-     0.0f,  0.0f, 0.0f, // 4
-    -2.0f, -1.0f, 0.0f, // 5
-    -1.0f,  0.0f, 0.0f, // 6
-     2.0f,  0.5f, 0.0f  // 7
-    -1.0f,  1.0f, 0.0f, // 8
-};
+typedef struct {
+    float x, y, z;
+} Star;
 
-/*x: 0.000000, y: 1.000000
-x: -0.951057, y: 0.309017
-x: -0.587785, y: -0.809017
-x: 0.587785, y: -0.809017
-x: 0.951057, y: 0.309017*/
+Star stars[NUM_STARS];
 
-// glVertex3f(0.0,0.2,0.0);
-// glVertex3f(0.1,0.1,0.0);
-// glVertex3f(0.2,0.05,0.0);
-// glVertext3f(0.1,0.0,0.0);
-// glVertex3f(0.2,-0.1,0.0);
-// glVertex3f(0.0,0.0,0.0);
-// glVertex3f(-0.2,-0.1,0.0);
-// glVertex3f(-0.1,0.0,0.0);
-// glVertex3f(-0.2,0.05,0.0);
-// glVertex3f(-0.1,0.1,0.0);
+void initStars() {
+    for (int i = 0; i < NUM_STARS; ++i) {
+        // Wider X/Y range for perspective, and positive Z values (since camera looks down -Z)
+        stars[i].x = ((float)rand() / RAND_MAX - 0.5f) * 4.0f; // -2 to 2
+        stars[i].y = ((float)rand() / RAND_MAX - 0.5f) * 4.0f; // -2 to 2
+        stars[i].z = -((float)rand() / RAND_MAX * 48.0f + 2.0f); // -2 (near) to -50 (far)
+    }
+}
 
-static GLfloat colors[] = {
-    1.0f, 0.0f, 0.0f,
-    0.0f, 1.0f, 0.0f,
-    0.0f, 0.0f, 1.0f,
-    1.0f, 1.0f, 1.0f,
-    1.0f, 1.0f, 1.0f,
-    1.0f, 1.0f, 1.0f,
-    1.0f, 1.0f, 1.0f,
-    1.0f, 1.0f, 1.0f
-};
+void updateStars(float speed) {
+    for (int i = 0; i < NUM_STARS; ++i) {
+        stars[i].z += speed; // Move toward camera (less negative)
+        if (stars[i].z > -2.0f) { // If past near plane
+            stars[i].x = ((float)rand() / RAND_MAX - 0.5f) * 4.0f;
+            stars[i].y = ((float)rand() / RAND_MAX - 0.5f) * 4.0f;
+            stars[i].z = -50.0f;
+        }
+    }
+}
 
-// void reshape(int width, int height) {
-//     glViewport(0, 0, width, height);
-//     glLoadIdentity();
-//     glOrtho(0.0, width, 0.0, height, -1.0, 1.0);
-// }
+void drawStars() {
+    glBegin(GL_POINTS);
+    for (int i = 0; i < NUM_STARS; ++i) {
+        float brightness = 1.0f - (stars[i].z / -50.0f);
+        glColor3f(brightness, brightness, brightness);
+        glVertex3f(stars[i].x, stars[i].y, stars[i].z);
+    }
+    glEnd();
+}
+
+#define STAR_POINTS 10
+#define STAR_RADIUS_OUTER 1.0f
+#define STAR_RADIUS_INNER 0.5f
+#define STAR_DEPTH 0.2f
+
+void draw3DStar(float x_center, float y_center, float z_center) {
+    float front_z = z_center + STAR_DEPTH / 2.0f;
+    float back_z  = z_center - STAR_DEPTH / 2.0f;
+
+    // --- Draw front face ---
+    glBegin(GL_TRIANGLE_FAN);
+    glColor3f(1.0f, 1.0f, 0.0f);
+    glVertex3f(x_center, y_center, front_z);
+    for (int i = 0; i <= STAR_POINTS; ++i) {
+        int idx = i % STAR_POINTS;
+        float radius = (idx % 2 == 0) ? STAR_RADIUS_OUTER : STAR_RADIUS_INNER;
+        float angle = 0.5f * (float)M_PI + 2.0f * (float)M_PI * idx / STAR_POINTS;
+        float x = x_center + radius * cosf(angle);
+        float y = y_center + radius * sinf(angle);
+        glColor3f(1.0f, 0.5f, 0.0f);
+        glVertex3f(x, y, front_z);
+    }
+    glEnd();
+
+    // --- Draw back face ---
+    glBegin(GL_TRIANGLE_FAN);
+    glColor3f(1.0f, 1.0f, 0.0f);
+    glVertex3f(x_center, y_center, back_z);
+    for (int i = 0; i <= STAR_POINTS; ++i) {
+        int idx = i % STAR_POINTS;
+        float radius = (idx % 2 == 0) ? STAR_RADIUS_OUTER : STAR_RADIUS_INNER;
+        float angle = 0.5f * (float)M_PI + 2.0f * (float)M_PI * idx / STAR_POINTS;
+        float x = x_center + radius * cosf(angle);
+        float y = y_center + radius * sinf(angle);
+        glColor3f(1.0f, 0.5f, 0.0f);
+        glVertex3f(x, y, back_z);
+    }
+    glEnd();
+
+    // --- Draw sides ---
+    glBegin(GL_QUAD_STRIP);
+    for (int i = 0; i <= STAR_POINTS; ++i) {
+        int idx = i % STAR_POINTS;
+        float radius = (idx % 2 == 0) ? STAR_RADIUS_OUTER : STAR_RADIUS_INNER;
+        float angle = 0.5f * (float)M_PI + 2.0f * (float)M_PI * idx / STAR_POINTS;
+        float x = x_center + radius * cosf(angle);
+        float y = y_center + radius * sinf(angle);
+        glColor3f(1.0f, 0.7f, 0.2f);
+        glVertex3f(x, y, front_z);
+        glVertex3f(x, y, back_z);
+    }
+    glEnd();
+}
+
+#define PIPE_SEGMENTS 64
+//#define PIPE_LENGTH 3.0f
+#define PIPE_RADIUS_OUTER 0.5f
+//#define PIPE_RADIUS_INNER 0.3f
+
+void drawRainbowPipe(float z_start, float z_end, int numSegments, float gapFraction) {
+    glEnable(GL_BLEND); // Enable blending for transparency
+
+    float totalLength = z_end - z_start;
+    float segLength = totalLength / numSegments;
+    float dashLength = segLength * (1.0f - gapFraction);
+    float gapHalf = segLength * gapFraction * 0.5f;
+
+    for (int s = 0; s < numSegments; ++s) {
+        float segStart, segEnd;
+
+        if (s == 0) {
+            // First segment: gap only on the right
+            segStart = z_start;
+            segEnd = z_start + dashLength + gapHalf;
+        } else if (s == numSegments - 1) {
+            // Last segment: gap only on the left
+            segStart = z_end - dashLength - gapHalf;
+            segEnd = z_end;
+        } else {
+            // Middle segments: gap/2 on both sides
+            float center = z_start + s * segLength + segLength * 0.5f;
+            segStart = center - dashLength * 0.5f;
+            segEnd = center + dashLength * 0.5f;
+        }
+
+        if (segEnd > z_end) segEnd = z_end;
+        if (segStart < z_start) segStart = z_start;
+        if (segEnd <= segStart) continue;
+
+        glBegin(GL_QUAD_STRIP);
+        for (int i = 0; i <= PIPE_SEGMENTS; ++i) {
+            float t = (float)i / PIPE_SEGMENTS;
+            float angle = t * 2.0f * (float)M_PI;
+            float x = cosf(angle);
+            float y = sinf(angle);
+
+            glColor4f(0.2f, 0.8f, 1.0f, 0.5f); // Bright cyan, 50% transparent
+            glVertex3f(x * PIPE_RADIUS_OUTER, y * PIPE_RADIUS_OUTER, segStart);
+            glVertex3f(x * PIPE_RADIUS_OUTER, y * PIPE_RADIUS_OUTER, segEnd);
+        }
+        glEnd();
+    }
+
+    glDisable(GL_BLEND); // Optionally disable blending after drawing
+}
+
+void drawPipeBetweenStars(float x1, float y1, float z1, float x2, float y2, float z2) {
+    // Compute direction vector
+    float dx = x2 - x1;
+    float dy = y2 - y1;
+    float dz = z2 - z1;
+    float length = sqrtf(dx*dx + dy*dy + dz*dz);
+
+    if (length > 0.0001f) {
+        // Offset amount (from star center to surface)
+        float offset = STAR_RADIUS_OUTER;
+
+        // Normalize direction
+        float dir[3] = {dx/length, dy/length, dz/length};
+
+        float sx = x1;
+        float sy = y1;
+        float sz = z1;
+        float ex = x2;
+        float ey = y2;
+        float ez = z2;
+
+        // New length for the pipe
+        float pipeLength = sqrtf((ex-sx)*(ex-sx) + (ey-sy)*(ey-sy) + (ez-sz)*(ez-sz));
+
+        // Find rotation axis (cross product of (0,0,1) and dir)
+        float rx = -dir[1];
+        float ry = dir[0];
+        float rz = 0.0f;
+        float axis_len = sqrtf(rx*rx + ry*ry);
+        float angle = 0.0f;
+        if (axis_len > 0.0001f) {
+            rx /= axis_len;
+            ry /= axis_len;
+            angle = acosf(dir[2]) * 180.0f / (float)M_PI;
+        } else {
+            rx = 1.0f; ry = 0.0f;
+            angle = 0.0f;
+        }
+
+        glPushMatrix();
+        glTranslatef(sx, sy, sz);
+        glRotatef(angle, rx, ry, rz);
+        drawRainbowPipe(0.0f, pipeLength, fabsf(z1-z2), 0.5f);
+        glPopMatrix();
+    }
+}
+
+float camX = 0.0f, camY = 0.0f, camZ = -10.0f;
+float yaw = 0.0f, pitch = 0.0f;
+float moveSpeed = 0.1f, mouseSensitivity = 0.2f;
+int lastMouseX = 0, lastMouseY = 0;
+int mouseCaptured = 0;
 
 int main() {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -91,6 +221,8 @@ int main() {
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4); // Try 4 or 8 for higher quality
 
     SDL_GLContext context = SDL_GL_CreateContext(window);
     if (!context) {
@@ -109,36 +241,30 @@ int main() {
     // Set the initial orthographic projection to match the window size
     // reshape(w, h);
 
-
-    // make viewport -2 to 2
     glViewport(0, 0, w, h);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(-2.0, 2.0, -2.0, 2.0, -10.0, 10.0);
+    glFrustum(-1.0, 1.0, -1.0, 1.0, 2.0, 50.0);
     glMatrixMode(GL_MODELVIEW);
-
+    glEnable(GL_MULTISAMPLE);
+    glEnable(GL_LINE_SMOOTH);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_POLYGON_SMOOTH);
+    glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+    glEnable(GL_DEPTH_TEST);
     
-    // if (glUniformMatrix4x3fv) {
-    //     printf("glUniformMatrix4x3fv is available. OpenGL 2.1 is supported.\n");
-    // } else {
-    //     printf("glUniformMatrix4x3fv is not available. OpenGL 2.1 is not supported.\n");
-    // }
-
-    // if (glSpecializeShader) {
-    //     printf("glSpecializeShader is available. OpenGL 4.6 is supported.\n");
-    // } else {
-    //     printf("glSpecializeShader is not available. OpenGL 4.6 is not supported.\n");
-    // }
+    initStars();
 
     int running = 1;
     SDL_Event e;
-    float angle = 0.0f;
+
     while (running) {
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT) {
                 running = 0;
             }
-            // if (e.type == SDL_EVENT_WINDOW_RESIZED) {
+            //if (e.type == SDL_EVENT_WINDOW_RESIZED) {
             //     w = e.window.data1;
             //     h = e.window.data2;
             //     reshape(w, h);
@@ -147,52 +273,61 @@ int main() {
                 if (e.key.key == SDLK_ESCAPE) {
                     running = 0;
                 }
+                if (e.key.key == SDLK_W) { // Forward
+                    camX -= moveSpeed * sinf(yaw * M_PI / 180.0f);
+                    camZ -= moveSpeed * cosf(yaw * M_PI / 180.0f);
+                }
+                if (e.key.key == SDLK_S) { // Backward
+                    camX += moveSpeed * sinf(yaw * M_PI / 180.0f);
+                    camZ += moveSpeed * cosf(yaw * M_PI / 180.0f);
+                }
+                if (e.key.key == SDLK_A) { // Left
+                    camX -= moveSpeed * cosf(yaw * M_PI / 180.0f);
+                    camZ += moveSpeed * sinf(yaw * M_PI / 180.0f);
+                }
+                if (e.key.key == SDLK_D) { // Right
+                    camX += moveSpeed * cosf(yaw * M_PI / 180.0f);
+                    camZ -= moveSpeed * sinf(yaw * M_PI / 180.0f);
+                }
+                if (e.key.key == SDLK_SPACE) camY += moveSpeed; // Up
+                if (e.key.key == SDLK_LCTRL) camY -= moveSpeed; // Down
+            }
+            if (e.type == SDL_EVENT_MOUSE_MOTION && mouseCaptured) {
+                int dx = e.motion.xrel;
+                int dy = e.motion.yrel;
+                yaw   += dx * mouseSensitivity;
+                pitch += dy * mouseSensitivity;
+                if (pitch > 89.0f) pitch = 89.0f;
+                if (pitch < -89.0f) pitch = -89.0f;
+            }
+            if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                SDL_SetWindowRelativeMouseMode(window, true); // Capture mouse
+                mouseCaptured = 1;
+            }
+            if (e.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+                SDL_SetWindowRelativeMouseMode(window, false); // Release mouse
+                mouseCaptured = 0;
             }
         }
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-        //glTranslatef(-1.0f, 0.0f, 0.0f); // Move cube into view
-        glRotatef(angle, 1.0f, 1.0f, 0.0f); // Rotate cube
-
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glVertexPointer(3, GL_FLOAT, 0, star);
-
-        // glDrawElements(GL_QUADS, 4, GL_UNSIGNED_BYTE, frontIndices);
-        // glDrawElements(GL_QUADS, 4, GL_UNSIGNED_BYTE, rightIndices);
-        // glDrawElements(GL_QUADS, 4, GL_UNSIGNED_BYTE, bottomIndices);
-        // glDrawElements(GL_QUADS, 4, GL_UNSIGNED_BYTE, backIndices);
-        // glDrawElements(GL_QUADS, 4, GL_UNSIGNED_BYTE, leftIndices);
-        // glDrawElements(GL_QUADS, 4, GL_UNSIGNED_BYTE, topIndices);
-       
-        // Example using GL_LINE_LOOP
-        //glDrawArrays(GL_LINE_LOOP, 0, 9); // Draw the star shape
-        glBegin(GL_LINE_LOOP);
-        for (int i = 0; i < 5; ++i) {
-            double angle1 = 0.5 * M_PI + 2 * M_PI * i / 5;
-            double x1 = 1.0 * cos(angle1);
-            double y1 = 1.0 * sin(angle1);
-
-            double angle2 = 1.5 * M_PI + 2 * M_PI * ((i + 3) % 5) / 5;
-            double x2 = 0.5 * cos(angle2);
-            double y2 = 0.5 * sin(angle2);
-
-            // Rainbow color for each point
-            float t1 = (float)i / 5.0f;
-            float t2 = (float)((i + 1) % 5) / 5.0f;
-            // Simple HSV to RGB approximation for rainbow
-            glColor3f(0.5f + 0.5f * cos(6.2831f * t1), 0.5f + 0.5f * cos(6.2831f * t1 + 2.094f), 0.5f + 0.5f * cos(6.2831f * t1 + 4.188f));
-            glVertex3f(x1, y1, 0.0f);
-            glColor3f(0.5f + 0.5f * cos(6.2831f * t2), 0.5f + 0.5f * cos(6.2831f * t2 + 2.094f), 0.5f + 0.5f * cos(6.2831f * t2 + 4.188f));
-            glVertex3f(x2, y2, 0.0f);
-        }
-        glEnd();
+        glRotatef(pitch, 1.0f, 0.0f, 0.0f);
+        glRotatef(yaw,   0.0f, 1.0f, 0.0f);
+        glTranslatef(-camX, -camY, -camZ);
+        
+        glPointSize(3.0f);
+        updateStars(0.15f); drawStars();
+        
+        draw3DStar(0.0f, 0.0f, -10.0f); // Draw at local z=0
+        draw3DStar(0.0f, 0.0f, -25.0f); // Draw at local z=0
+        
+        drawPipeBetweenStars(0.0f, 0.0f, -25.0f, 0.0f, 0.0f, -10.0f);
 
         glDisableClientState(GL_VERTEX_ARRAY);
 
-        angle += 0.0f; // Animate rotation
-        
         SDL_GL_SwapWindow(window);
     }
 

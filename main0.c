@@ -1,8 +1,7 @@
-#include <glad/glad.h>
 #include <SDL3/SDL.h>
+#include <glad/glad.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <math.h>
 
 #define drawOneLine(x1, y1, x2, y2) \
@@ -12,7 +11,7 @@
     glEnd();
     
 
-#define NUM_STARS 600
+#define NUM_STARS 300
 
 typedef struct {
     float x, y, z;
@@ -23,19 +22,19 @@ Star stars[NUM_STARS];
 void initStars() {
     for (int i = 0; i < NUM_STARS; ++i) {
         // Wider X/Y range for perspective, and positive Z values (since camera looks down -Z)
-        stars[i].x = ((float)rand() / RAND_MAX - 0.5f) * 32.0f; // -16 to 16
-        stars[i].y = ((float)rand() / RAND_MAX - 0.5f) * 32.0f; // -16 to 16
-        stars[i].z = (((float)rand()/RAND_MAX) * 32.0f - 16.0f); // -2 (near) to -50 (far)
+        stars[i].x = ((float)rand() / RAND_MAX - 0.5f) * 4.0f; // -2 to 2
+        stars[i].y = ((float)rand() / RAND_MAX - 0.5f) * 4.0f; // -2 to 2
+        stars[i].z = -((float)rand() / RAND_MAX * 48.0f + 2.0f); // -2 (near) to -50 (far)
     }
 }
 
 void updateStars(float speed) {
     for (int i = 0; i < NUM_STARS; ++i) {
         stars[i].z += speed; // Move toward camera (less negative)
-        if (stars[i].z > 16.0f) { // If past near plane
-            stars[i].x = ((float)rand() / RAND_MAX - 0.5f) * 32.0f;
-            stars[i].y = ((float)rand() / RAND_MAX - 0.5f) * 32.0f;
-            stars[i].z = -16.0f;
+        if (stars[i].z > -2.0f) { // If past near plane
+            stars[i].x = ((float)rand() / RAND_MAX - 0.5f) * 4.0f;
+            stars[i].y = ((float)rand() / RAND_MAX - 0.5f) * 4.0f;
+            stars[i].z = -50.0f;
         }
     }
 }
@@ -106,7 +105,7 @@ void draw3DStar(float x_center, float y_center, float z_center) {
 
 #define PIPE_SEGMENTS 64
 //#define PIPE_LENGTH 3.0f
-#define PIPE_RADIUS_OUTER 0.5
+#define PIPE_RADIUS_OUTER 0.5f
 //#define PIPE_RADIUS_INNER 0.3f
 
 void drawRainbowPipe(float z_start, float z_end, int numSegments, float gapFraction) {
@@ -215,7 +214,7 @@ int main() {
         return 1;
     }
 
-    int w = 1280, h = 720;
+    int w = 1200, h = 600;
     SDL_Window* window = SDL_CreateWindow("OpenGL 2.1 + SDL3 (C)",
                                           w, h,
                                           SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
@@ -249,7 +248,7 @@ int main() {
     float aspect = (float)w / (float)h;
     float frustumHeight = 1.0f;
     float frustumWidth = frustumHeight * aspect;
-    glFrustum(-frustumWidth, frustumWidth, -frustumHeight, frustumHeight, 0.5 , 50.0);
+    glFrustum(-frustumWidth, frustumWidth, -frustumHeight, frustumHeight, 2.0, 50.0);
     glMatrixMode(GL_MODELVIEW);
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_LINE_SMOOTH);
@@ -258,37 +257,12 @@ int main() {
     glEnable(GL_POLYGON_SMOOTH);
     glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_TEXTURE_2D);    
     
     initStars();
 
     int running = 1;
     SDL_Event e;
 
-    /*
-    //creating our FBO to store the stars
-    GLuint fbo, tex;    
-    glGenBuffers(1, &fbo);
-    glBindBuffer(GL_FRAMEBUFFER, fbo);    
-    
-    // Create texture
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // Attach texture to FBO
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);    
-    // if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-    //    printf("FBO not complete!\n");
-    // }     
-    
-    // Unbind FBO to render to screen by default
-    glBindBuffer(GL_FRAMEBUFFER, 0);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    */
-    
-    bool bForward=0 , bBackward=0, bLeft=0, bRight=0, bUp=0, bDown=0;
     while (running) {
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT) {
@@ -300,25 +274,27 @@ int main() {
             //     reshape(w, h);
             // }
             if (e.type == SDL_EVENT_KEY_DOWN) {
-                switch (e.key.key) {
-                    case SDLK_W: bForward = true; break; // Forward
-                    case SDLK_S: bBackward = true; break; // Backward
-                    case SDLK_A: bLeft = true; break; // Left
-                    case SDLK_D: bRight = true; break; // Right                    
-                    case SDLK_ESCAPE: running = 0; break; // Exit
-                    case SDLK_SPACE: bUp = true; break; // Up
-                    case SDLK_LCTRL: bDown = true; break; // Down
-                }                                
-            }
-            if (e.type == SDL_EVENT_KEY_UP) {
-                switch (e.key.key) {
-                    case SDLK_W: bForward = false; break; // Forward
-                    case SDLK_S: bBackward = false; break; // Backward
-                    case SDLK_A: bLeft = false; break; // Left
-                    case SDLK_D: bRight = false; break; // Right
-                    case SDLK_SPACE: bUp = false; break; // Up
-                    case SDLK_LCTRL: bDown = false; break; // Down
+                if (e.key.key == SDLK_ESCAPE) {
+                    running = 0;
                 }
+                if (e.key.key == SDLK_W) { // Forward
+                    camX -= moveSpeed * sinf(yaw * M_PI / 180.0f);
+                    camZ -= moveSpeed * cosf(yaw * M_PI / 180.0f);
+                }
+                if (e.key.key == SDLK_S) { // Backward
+                    camX += moveSpeed * sinf(yaw * M_PI / 180.0f);
+                    camZ += moveSpeed * cosf(yaw * M_PI / 180.0f);
+                }
+                if (e.key.key == SDLK_A) { // Left
+                    camX -= moveSpeed * cosf(yaw * M_PI / 180.0f);
+                    camZ += moveSpeed * sinf(yaw * M_PI / 180.0f);
+                }
+                if (e.key.key == SDLK_D) { // Right
+                    camX += moveSpeed * cosf(yaw * M_PI / 180.0f);
+                    camZ -= moveSpeed * sinf(yaw * M_PI / 180.0f);
+                }
+                if (e.key.key == SDLK_SPACE) camY += moveSpeed; // Up
+                if (e.key.key == SDLK_LCTRL) camY -= moveSpeed; // Down
             }
             if (e.type == SDL_EVENT_MOUSE_MOTION && mouseCaptured) {
                 int dx = e.motion.xrel;
@@ -337,77 +313,24 @@ int main() {
                 mouseCaptured = 0;
             }
         }
-        { //handle movement per frame
-            if (bForward) {
-                // move forward based on where you looking at (using all 3 angles)
-                camX += moveSpeed * sinf(yaw * M_PI / 180.0f);
-                camZ -= moveSpeed * cosf(yaw * M_PI / 180.0f);
-                camY -= moveSpeed * sinf(pitch * M_PI / 180.0f); // Adjust Y based on pitch            
-            }
-            if (bBackward) {
-                camX -= moveSpeed * sinf(yaw * M_PI / 180.0f);
-                camZ += moveSpeed * cosf(yaw * M_PI / 180.0f);
-                camY += moveSpeed * sinf(pitch * M_PI / 180.0f); // Adjust Y based on pitch            
-            }
-            if (bLeft) {
-                camX -= moveSpeed * cosf(yaw * M_PI / 180.0f);
-                camZ -= moveSpeed * sinf(yaw * M_PI / 180.0f);
-            }
-            if (bRight) {
-                camX += moveSpeed * cosf(yaw * M_PI / 180.0f);
-                camZ += moveSpeed * sinf(yaw * M_PI / 180.0f);
-            }
-            if (bUp) {
-                camY += moveSpeed; // Move up
-            }
-            if (bDown) {
-                camY -= moveSpeed; // Move down
-            }
-        }
 
-        //make alpha have an effect in glClear
-        // Clear the screen and depth buffer        
-                
-        glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT ); 
-        //glClear(GL_DEPTH_BUFFER_BIT);
-        
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-
-        /*
-        glTranslatef( 0.0f , 0.0f , -1.0f );
-        glEnable(GL_BLEND);        
-        glDepthMask(GL_FALSE);
-        //draw a filled 2D quad covering the whole screen         
-        glColor4f(0.0f, 0.0f, 0.0f, 1.0f); // Black background
-        glBegin(GL_QUADS);            
-            glVertex2f(-4.0f, -4.0f);
-            glVertex2f( 4.0f, -4.0f);
-            glVertex2f( 4.0f,  4.0f);
-            glVertex2f(-4.0f,  4.0f);
-        glEnd();
-        glDepthMask(GL_TRUE);
-        glDisable(GL_BLEND);
-        glLoadIdentity();
-        */
-
         glRotatef(pitch, 1.0f, 0.0f, 0.0f);
         glRotatef(yaw,   0.0f, 1.0f, 0.0f);
-                
+        glTranslatef(-camX, -camY, -camZ);
+        
         glPointSize(3.0f);
-        updateStars(0.15f); drawStars();        
-        
-         glTranslatef(-camX, -camY, -camZ);
-
-        
-        
+        updateStars(0.15f); drawStars();
         
         draw3DStar(0.0f, 0.0f, -10.0f); // Draw at local z=0
         draw3DStar(0.0f, 0.0f, -25.0f); // Draw at local z=0
         
         drawPipeBetweenStars(0.0f, 0.0f, -25.0f, 0.0f, 0.0f, -10.0f);
 
-       // glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_VERTEX_ARRAY);
 
         SDL_GL_SwapWindow(window);
         static int iPrevTime = 0;

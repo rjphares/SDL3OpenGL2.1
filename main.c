@@ -336,29 +336,6 @@ void drawLandMap() {
     }
 }
 
-void drawBuildingsOnLand() {
-    // Example: 3 buildings at different positions and sizes
-    glColor3f(0.6f, 0.6f, 0.6f); // Gray building
-    drawCube(1.0f, 3.0f, 1.0f); // Will be positioned below
-
-    glPushMatrix();
-    glTranslatef(3.0f, 1.5f, 2.0f); // (x, y, z)
-    drawCube(2.0f, 3.0f, 2.0f);
-    glPopMatrix();
-
-    glColor3f(0.8f, 0.5f, 0.2f); // Brown building
-    glPushMatrix();
-    glTranslatef(-4.0f, 1.0f, -3.0f);
-    drawCube(1.5f, 2.0f, 1.5f);
-    glPopMatrix();
-
-    glColor3f(0.3f, 0.3f, 0.7f); // Blue building
-    glPushMatrix();
-    glTranslatef(6.0f, 2.0f, -5.0f);
-    drawCube(1.0f, 4.0f, 1.0f);
-    glPopMatrix();
-}
-
 void drawBuildingWithWindows(
     float bx, float by, float bz,
     float sx, float sy, float sz,
@@ -512,6 +489,98 @@ void drawStreet(float y, float z, float length, float width) {
     glEnd();
 }
 
+bool CreateFBO(int w, int h, GLuint* fbo, GLuint* tex) {
+    glGenFramebuffers(1, fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, *fbo);    
+        
+    // Create texture
+    glGenTextures(1, tex);
+    glBindTexture(GL_TEXTURE_2D, *tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // Attach texture to FBO
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *tex, 0);    
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        printf("FBO not complete!\n");
+        return false;
+    }
+    // Unbind FBO to render to screen by default
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);  
+    return true;
+}
+void BeginFBO( int fbo , float fAlphaClear ) {
+    // bind the FBO and texture to render stars
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    //glViewport(0, 0, w, h);
+    //glBindTexture(GL_TEXTURE_2D, tex);        
+            
+    //glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT ); 
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    glLoadIdentity();
+    glTranslatef( 0.0f , 0.0f , -1.0f );
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
+    glColor4f(0.0f, 0.0f, 0.0f, fAlphaClear); // Black background
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glBegin(GL_QUADS);            
+        glVertex2f(-4.0f, -4.0f);
+        glVertex2f( 4.0f, -4.0f);
+        glVertex2f( 4.0f,  4.0f);
+        glVertex2f(-4.0f,  4.0f);
+    glEnd();
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+}
+void EndFBO() {
+    // Unbind the FBO to render to screen by default
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //glViewport(0, 0, w, h);
+    //glBindTexture(GL_TEXTURE_2D, 0);
+}
+void DrawFBO( int fboTex ) {
+    glBindTexture(GL_TEXTURE_2D, fboTex);        
+    glPushMatrix();
+    glLoadIdentity();
+    glTranslatef( 0.0f , 0.0f , -1.0f );
+    /*
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);       
+
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+    glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_REPLACE);   // Use texture RGB
+    glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE0_RGB, GL_TEXTURE);
+    glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_RGB, GL_SRC_COLOR);
+
+    glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_REPLACE); // Use color alpha
+    glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE0_ALPHA, GL_PRIMARY_COLOR);
+    glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_ALPHA, GL_SRC_ALPHA);
+    */
+    glDisable(GL_BLEND);
+    glEnable(GL_TEXTURE_2D); 
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    //draw a filled 2D quad covering the whole screen         
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f); // Black background
+    glBegin(GL_QUADS);            
+        glTexCoord2f(0, 0); glVertex2f(-4.0f, -4.0f);
+        glTexCoord2f(1, 0); glVertex2f( 4.0f, -4.0f);
+        glTexCoord2f(1, 1); glVertex2f( 4.0f,  4.0f);
+        glTexCoord2f(0, 1); glVertex2f(-4.0f,  4.0f);
+    glEnd();
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+    glDisable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0); // Unbind texture
+    glPopMatrix();
+
+}
+
 int main() {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         fprintf(stderr, "SDL Init failed: %s\n", SDL_GetError());
@@ -568,28 +637,10 @@ int main() {
     int running = 1;
     SDL_Event e;
 
-    /*
+    
     //creating our FBO to store the stars
     GLuint fbo, tex;    
-    glGenBuffers(1, &fbo);
-    glBindBuffer(GL_FRAMEBUFFER, fbo);    
-    
-    // Create texture
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // Attach texture to FBO
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);    
-    // if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-    //    printf("FBO not complete!\n");
-    // }     
-    
-    // Unbind FBO to render to screen by default
-    glBindBuffer(GL_FRAMEBUFFER, 0);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    */
+    CreateFBO(w, h, &fbo, &tex);    
     
     bool bForward=0 , bBackward=0, bLeft=0, bRight=0, bUp=0, bDown=0;
     float playerX = 0.0f, playerY = 0.0f, playerZ = -9.0f;
@@ -684,32 +735,17 @@ int main() {
             }
         }
 
-        //make alpha have an effect in glClear
-        // Clear the screen and depth buffer        
-                
-        glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT ); 
-        //glClear(GL_DEPTH_BUFFER_BIT);
+        BeginFBO( fbo , 0.15f ); //using a FBO cleared 33%
         
+        //glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+        glClear( GL_DEPTH_BUFFER_BIT );
+                
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-
-        /*
-        glTranslatef( 0.0f , 0.0f , -1.0f );
-        glEnable(GL_BLEND);        
-        glDepthMask(GL_FALSE);
-        //draw a filled 2D quad covering the whole screen         
-        glColor4f(0.0f, 0.0f, 0.0f, 1.0f); // Black background
-        glBegin(GL_QUADS);            
-            glVertex2f(-4.0f, -4.0f);
-            glVertex2f( 4.0f, -4.0f);
-            glVertex2f( 4.0f,  4.0f);
-            glVertex2f(-4.0f,  4.0f);
-        glEnd();
-        glDepthMask(GL_TRUE);
-        glDisable(GL_BLEND);
-        glLoadIdentity();
-        */
-
+        
+        //calculate the pitch/yaw based on the Player's camera angles
+        
+        
         glRotatef(pitch, 1.0f, 0.0f, 0.0f);
         glRotatef(yaw,   0.0f, 1.0f, 0.0f);
                 
@@ -717,9 +753,14 @@ int main() {
         if (currentScene == SCENE_SPACE) {
             updateStars(0.15f); drawStars();  
         }      
-        
-        glTranslatef(-camX, -camY, -camZ);
 
+        EndFBO();        
+        DrawFBO( tex ); // Draw the FBO texture to the screen  
+
+        glClear( GL_DEPTH_BUFFER_BIT );
+        
+        //glTranslatef(-camX, -camY, -camZ);
+        glTranslatef(-playerX, -playerY, -playerZ);
         
         if (currentScene == SCENE_SPACE) {
         
@@ -745,8 +786,22 @@ int main() {
                 playerX = waypoints[currentWaypoint].x + (waypoints[nextWaypoint].x - waypoints[currentWaypoint].x) * travelT;
                 playerY = waypoints[currentWaypoint].y + (waypoints[nextWaypoint].y - waypoints[currentWaypoint].y) * travelT;
                 playerZ = waypoints[currentWaypoint].z + (waypoints[nextWaypoint].z - waypoints[currentWaypoint].z) * travelT;
+                //set yaw and pitch based on direction to next waypoint
+                float dx = (waypoints[nextWaypoint].x - waypoints[currentWaypoint].x);
+                float dy = (waypoints[nextWaypoint].y - waypoints[currentWaypoint].y);
+                //*** might need to undo negative sign ***
+                float dz = -(waypoints[nextWaypoint].z - waypoints[currentWaypoint].z);
+                
+                float newyaw = atan2f(dx, dz) * 180.0f / M_PI; // Yaw based on XZ plane
+                float newpitch = atan2f(dy, sqrtf(dx * dx + dz * dz)) * 180.0f / M_PI; // Pitch based on Y and 
+                //horizontal distance
+                yaw = yaw*.95f + newyaw*0.05f; // Smoothly adjust yaw
+                pitch = pitch*.95f + newpitch*0.05f; // Smoothly adjust pitch
+
+
             }
             drawBlockyPerson(playerX, playerY, playerZ, 0.1f);
+        
 
             // Then draw the pipe with depth mask off
             glDepthMask(GL_FALSE);

@@ -122,12 +122,14 @@ void drawRainbowPipe(float z_start, float z_end, int numSegments, float gapFract
 
         if (s == 0) {
             // First segment: gap only on the right
-            segStart = z_start;
-            segEnd = z_start + dashLength + gapHalf;
+            //segStart = z_start;
+            //segEnd = z_start + dashLength + gapHalf;
+            continue; // Skip first segment for now
         } else if (s == numSegments - 1) {
             // Last segment: gap only on the left
-            segStart = z_end - dashLength - gapHalf;
-            segEnd = z_end;
+            //segStart = z_end - dashLength - gapHalf;
+            //segEnd = z_end;
+            continue; // Skip last segment for now
         } else {
             // Middle segments: gap/2 on both sides
             float center = z_start + s * segLength + segLength * 0.5f;
@@ -198,7 +200,7 @@ void drawPipeBetweenStars(float x1, float y1, float z1, float x2, float y2, floa
         glPushMatrix();
         glTranslatef(sx, sy, sz);
         glRotatef(angle, rx, ry, rz);
-        drawRainbowPipe(0.0f, pipeLength, fabsf(z1-z2), 0.5f);
+        drawRainbowPipe(0.0f, pipeLength, pipeLength, 0.5f);
         glPopMatrix();
     }
 }
@@ -208,6 +210,307 @@ float yaw = 0.0f, pitch = 0.0f;
 float moveSpeed = 0.1f, mouseSensitivity = 0.2f;
 int lastMouseX = 0, lastMouseY = 0;
 int mouseCaptured = 0;
+
+void drawCube(float sx, float sy, float sz) {
+    // Draw a cube centered at the origin, scaled by sx, sy, sz
+    glPushMatrix();
+    glScalef(sx, sy, sz);
+    glBegin(GL_QUADS);
+    // Front
+    glVertex3f(-0.5f, -0.5f,  0.5f);
+    glVertex3f( 0.5f, -0.5f,  0.5f);
+    glVertex3f( 0.5f,  0.5f,  0.5f);
+    glVertex3f(-0.5f,  0.5f,  0.5f);
+    // Back
+    glVertex3f(-0.5f, -0.5f, -0.5f);
+    glVertex3f( 0.5f, -0.5f, -0.5f);
+    glVertex3f( 0.5f,  0.5f, -0.5f);
+    glVertex3f(-0.5f,  0.5f, -0.5f);
+    // Left
+    glVertex3f(-0.5f, -0.5f, -0.5f);
+    glVertex3f(-0.5f, -0.5f,  0.5f);
+    glVertex3f(-0.5f,  0.5f,  0.5f);
+    glVertex3f(-0.5f,  0.5f, -0.5f);
+    // Right
+    glVertex3f(0.5f, -0.5f, -0.5f);
+    glVertex3f(0.5f, -0.5f,  0.5f);
+    glVertex3f(0.5f,  0.5f,  0.5f);
+    glVertex3f(0.5f,  0.5f, -0.5f);
+    // Top
+    glVertex3f(-0.5f, 0.5f, -0.5f);
+    glVertex3f( 0.5f, 0.5f, -0.5f);
+    glVertex3f( 0.5f, 0.5f,  0.5f);
+    glVertex3f(-0.5f, 0.5f,  0.5f);
+    // Bottom
+    glVertex3f(-0.5f, -0.5f, -0.5f);
+    glVertex3f( 0.5f, -0.5f, -0.5f);
+    glVertex3f( 0.5f, -0.5f,  0.5f);
+    glVertex3f(-0.5f, -0.5f,  0.5f);
+    glEnd();
+    glPopMatrix();
+}
+
+void drawBlockyPerson(float x, float y, float z, float scale) {
+    glPushMatrix();
+    glTranslatef(x, y, z);
+
+    // Torso
+    glColor3f(0.2f, 0.2f, 0.8f);
+    drawCube(scale * 0.6f, scale * 1.0f, scale * 0.3f);
+
+    // Head
+    glColor3f(1.0f, 0.8f, 0.6f);
+    glPushMatrix();
+    glTranslatef(0.0f, scale * 0.75f + scale * 0.25f, 0.0f);
+    drawCube(scale * 0.5f, scale * 0.5f, scale * 0.5f);
+    glPopMatrix();
+
+    // Left Arm
+    glColor3f(0.2f, 0.2f, 0.8f);
+    glPushMatrix();
+    glTranslatef(-scale * 0.45f, scale * 0.3f, 0.0f);
+    drawCube(scale * 0.2f, scale * 0.6f, scale * 0.2f);
+    glPopMatrix();
+
+    // Right Arm
+    glPushMatrix();
+    glTranslatef(scale * 0.45f, scale * 0.3f, 0.0f);
+    drawCube(scale * 0.2f, scale * 0.6f, scale * 0.2f);
+    glPopMatrix();
+
+    // Left Leg
+    glColor3f(0.1f, 0.1f, 0.1f);
+    glPushMatrix();
+    glTranslatef(-scale * 0.18f, -scale * 0.8f, 0.0f);
+    drawCube(scale * 0.18f, scale * 0.6f, scale * 0.18f);
+    glPopMatrix();
+
+    // Right Leg
+    glPushMatrix();
+    glTranslatef(scale * 0.18f, -scale * 0.8f, 0.0f);
+    drawCube(scale * 0.18f, scale * 0.6f, scale * 0.18f);
+    glPopMatrix();
+
+    glPopMatrix();
+}
+
+typedef struct {
+    float x, y, z;
+} Waypoint;
+
+#define NUM_WAYPOINTS 4
+Waypoint waypoints[NUM_WAYPOINTS] = {
+    {0.0f, 0.0f, -10.0f},   // starA
+    {0.0f, 0.0f, -25.0f},   // starB
+    {5.0f, 5.0f, -40.0f},   // starC
+    {20.0f, 5.0f, -40.0f}   // starD
+};
+
+typedef enum {
+    SCENE_SPACE,
+    SCENE_LAND
+} SceneType;
+
+SceneType currentScene = SCENE_SPACE;
+
+void drawLandMap() {
+    glColor3f(0.2f, 0.8f, 0.2f); // Green land
+    float size = 20.0f;
+    float step = 0.5f; // Smaller step = smoother terrain
+    float heightScale = 2.0f;
+
+    for (float x = -size; x < size; x += step) {
+        glBegin(GL_TRIANGLE_STRIP);
+        for (float z = -size; z <= size; z += step) {
+            // Height function: hills using sine/cosine
+            float y1 = sinf(0.2f * x) * cosf(0.2f * z) * heightScale;
+            float y2 = sinf(0.2f * (x + step)) * cosf(0.2f * z) * heightScale;
+
+            glColor3f(0.2f + 0.1f * y1, 0.8f - 0.1f * y1, 0.2f); // Vary color by height
+            glVertex3f(x, y1, z);
+
+            glColor3f(0.2f + 0.1f * y2, 0.8f - 0.1f * y2, 0.2f);
+            glVertex3f(x + step, y2, z);
+        }
+        glEnd();
+    }
+}
+
+void drawBuildingsOnLand() {
+    // Example: 3 buildings at different positions and sizes
+    glColor3f(0.6f, 0.6f, 0.6f); // Gray building
+    drawCube(1.0f, 3.0f, 1.0f); // Will be positioned below
+
+    glPushMatrix();
+    glTranslatef(3.0f, 1.5f, 2.0f); // (x, y, z)
+    drawCube(2.0f, 3.0f, 2.0f);
+    glPopMatrix();
+
+    glColor3f(0.8f, 0.5f, 0.2f); // Brown building
+    glPushMatrix();
+    glTranslatef(-4.0f, 1.0f, -3.0f);
+    drawCube(1.5f, 2.0f, 1.5f);
+    glPopMatrix();
+
+    glColor3f(0.3f, 0.3f, 0.7f); // Blue building
+    glPushMatrix();
+    glTranslatef(6.0f, 2.0f, -5.0f);
+    drawCube(1.0f, 4.0f, 1.0f);
+    glPopMatrix();
+}
+
+void drawBuildingWithWindows(
+    float bx, float by, float bz,
+    float sx, float sy, float sz,
+    float windowW, float windowH,
+    float r, float g, float b // Building color
+) {
+    float windowGap = 0.1f; // Gap between windows
+
+    glColor3f(r, g, b); // Building color
+    glPushMatrix();
+    glTranslatef(bx, by, bz);
+    drawCube(sx, sy, sz);
+
+    // Calculate number of windows that fit per face
+    int numWindowsY = (int)((sy + windowGap) / (windowH + windowGap));
+    int numWindowsX = (int)((sx + windowGap) / (windowW + windowGap));
+    int numWindowsZ = (int)((sz + windowGap) / (windowW + windowGap));
+
+    float totalWinHeight = numWindowsY * windowH + (numWindowsY - 1) * windowGap;
+    float totalWinWidthX = numWindowsX * windowW + (numWindowsX - 1) * windowGap;
+    float totalWinWidthZ = numWindowsZ * windowW + (numWindowsZ - 1) * windowGap;
+
+    float startX = -sx/2 + (sx - totalWinWidthX) / 2 + windowW/2;
+    float startY = -sy/2 + (sy - totalWinHeight) / 2 + windowH/2;
+    float startZ = -sz/2 + (sz - totalWinWidthZ) / 2 + windowW/2;
+    float zFront = sz/2 + 0.01f;
+    float zBack  = -sz/2 - 0.01f;
+    float xRight = sx/2 + 0.01f;
+    float xLeft  = -sx/2 - 0.01f;
+
+    glColor3f(0.2f, 0.6f, 0.9f); // Window color
+
+    // Front face (z = sz/2)
+    for (int row = 0; row < numWindowsY; ++row) {
+        for (int col = 0; col < numWindowsX; ++col) {
+            float wx = startX + col * (windowW + windowGap);
+            float wy = startY + row * (windowH + windowGap);
+            glBegin(GL_QUADS);
+            glVertex3f(wx - windowW/2, wy - windowH/2, zFront);
+            glVertex3f(wx + windowW/2, wy - windowH/2, zFront);
+            glVertex3f(wx + windowW/2, wy + windowH/2, zFront);
+            glVertex3f(wx - windowW/2, wy + windowH/2, zFront);
+            glEnd();
+        }
+    }
+
+    // Back face (z = -sz/2)
+    for (int row = 0; row < numWindowsY; ++row) {
+        for (int col = 0; col < numWindowsX; ++col) {
+            float wx = startX + col * (windowW + windowGap);
+            float wy = startY + row * (windowH + windowGap);
+            glBegin(GL_QUADS);
+            glVertex3f(wx - windowW/2, wy - windowH/2, zBack);
+            glVertex3f(wx + windowW/2, wy - windowH/2, zBack);
+            glVertex3f(wx + windowW/2, wy + windowH/2, zBack);
+            glVertex3f(wx - windowW/2, wy + windowH/2, zBack);
+            glEnd();
+        }
+    }
+
+    // Right face (x = sx/2)
+    for (int row = 0; row < numWindowsY; ++row) {
+        for (int col = 0; col < numWindowsZ; ++col) {
+            float wz = startZ + col * (windowW + windowGap);
+            float wy = startY + row * (windowH + windowGap);
+            glBegin(GL_QUADS);
+            glVertex3f(xRight, wy - windowH/2, wz - windowW/2);
+            glVertex3f(xRight, wy - windowH/2, wz + windowW/2);
+            glVertex3f(xRight, wy + windowH/2, wz + windowW/2);
+            glVertex3f(xRight, wy + windowH/2, wz - windowW/2);
+            glEnd();
+        }
+    }
+
+    // Left face (x = -sx/2)
+    for (int row = 0; row < numWindowsY; ++row) {
+        for (int col = 0; col < numWindowsZ; ++col) {
+            float wz = startZ + col * (windowW + windowGap);
+            float wy = startY + row * (windowH + windowGap);
+            glBegin(GL_QUADS);
+            glVertex3f(xLeft, wy - windowH/2, wz - windowW/2);
+            glVertex3f(xLeft, wy - windowH/2, wz + windowW/2);
+            glVertex3f(xLeft, wy + windowH/2, wz + windowW/2);
+            glVertex3f(xLeft, wy + windowH/2, wz - windowW/2);
+            glEnd();
+        }
+    }
+
+    glPopMatrix();
+}
+
+void drawTree(float x, float y, float z, float trunkHeight, float trunkWidth, float leafSize) {
+    // Draw trunk
+    glColor3f(0.55f, 0.27f, 0.07f); // Brown
+    glPushMatrix();
+    glTranslatef(x, y + trunkHeight/2, z);
+    drawCube(trunkWidth, trunkHeight, trunkWidth);
+    glPopMatrix();
+
+    // Draw leaves (canopy)
+    glColor3f(0.1f, 0.7f, 0.2f); // Green
+    glPushMatrix();
+    glTranslatef(x, y + trunkHeight + leafSize/2, z);
+    drawCube(leafSize, leafSize, leafSize);
+    glPopMatrix();
+}
+
+void drawChristmasTree(float x, float y, float z, float trunkHeight, float trunkWidth, float leafHeight, float leafWidth) {
+    // Draw trunk
+    glColor3f(0.55f, 0.27f, 0.07f); // Brown
+    glPushMatrix();
+    glTranslatef(x, y + trunkHeight/2, z);
+    drawCube(trunkWidth, trunkHeight, trunkWidth);
+    glPopMatrix();
+
+    // Draw 3 triangle layers for leaves
+    glColor3f(0.1f, 0.7f, 0.2f); // Green
+    for (int i = 0; i < 3; ++i) {
+        float layerY = y + trunkHeight + i * (leafHeight * 0.6f);
+        float layerW = leafWidth * (1.0f - 0.2f * i);
+        float layerH = leafHeight * (1.0f - 0.15f * i);
+
+        glBegin(GL_TRIANGLES);
+        // Front face
+        glVertex3f(x, layerY + layerH, z);
+        glVertex3f(x - layerW/2, layerY, z + layerW/2);
+        glVertex3f(x + layerW/2, layerY, z + layerW/2);
+        // Right face
+        glVertex3f(x, layerY + layerH, z);
+        glVertex3f(x + layerW/2, layerY, z + layerW/2);
+        glVertex3f(x + layerW/2, layerY, z - layerW/2);
+        // Back face
+        glVertex3f(x, layerY + layerH, z);
+        glVertex3f(x + layerW/2, layerY, z - layerW/2);
+        glVertex3f(x - layerW/2, layerY, z - layerW/2);
+        // Left face
+        glVertex3f(x, layerY + layerH, z);
+        glVertex3f(x - layerW/2, layerY, z - layerW/2);
+        glVertex3f(x - layerW/2, layerY, z + layerW/2);
+        glEnd();
+    }
+}
+
+void drawStreet(float y, float z, float length, float width) {
+    glColor3f(0.2f, 0.2f, 0.2f); // Dark gray for street
+    glBegin(GL_QUADS);
+        glVertex3f(-length/2, y, z - width/2);
+        glVertex3f( length/2, y, z - width/2);
+        glVertex3f( length/2, y, z + width/2);
+        glVertex3f(-length/2, y, z + width/2);
+    glEnd();
+}
 
 int main() {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -289,6 +592,12 @@ int main() {
     */
     
     bool bForward=0 , bBackward=0, bLeft=0, bRight=0, bUp=0, bDown=0;
+    float playerX = 0.0f, playerY = 0.0f, playerZ = -9.0f;
+    int currentWaypoint = 0;
+    int nextWaypoint = 1;
+    float travelT = 0.0f;
+    int traveling = 1;
+    float travelSpeed = 0.2f; // Adjust for speed
     while (running) {
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT) {
@@ -308,6 +617,16 @@ int main() {
                     case SDLK_ESCAPE: running = 0; break; // Exit
                     case SDLK_SPACE: bUp = true; break; // Up
                     case SDLK_LCTRL: bDown = true; break; // Down
+                    case SDLK_UP:    playerZ -= 0.1f; break;
+                    case SDLK_DOWN:  playerZ += 0.1f; break;
+                    case SDLK_LEFT:  playerX -= 0.1f; break;
+                    case SDLK_RIGHT: playerX += 0.1f; break;
+                    case SDLK_TAB:
+                        if (currentScene == SCENE_SPACE)
+                            currentScene = SCENE_LAND;
+                        else
+                            currentScene = SCENE_SPACE;
+                        break;
                 }                                
             }
             if (e.type == SDL_EVENT_KEY_UP) {
@@ -395,19 +714,71 @@ int main() {
         glRotatef(yaw,   0.0f, 1.0f, 0.0f);
                 
         glPointSize(3.0f);
-        updateStars(0.15f); drawStars();        
+        if (currentScene == SCENE_SPACE) {
+            updateStars(0.15f); drawStars();  
+        }      
         
-         glTranslatef(-camX, -camY, -camZ);
+        glTranslatef(-camX, -camY, -camZ);
 
         
+        if (currentScene == SCENE_SPACE) {
         
-        
-        draw3DStar(0.0f, 0.0f, -10.0f); // Draw at local z=0
-        draw3DStar(0.0f, 0.0f, -25.0f); // Draw at local z=0
-        
-        drawPipeBetweenStars(0.0f, 0.0f, -25.0f, 0.0f, 0.0f, -10.0f);
+            draw3DStar(0.0f, 0.0f, -10.0f); // Draw at local z=0
+            draw3DStar(0.0f, 0.0f, -25.0f); // Draw at local z=0
+            draw3DStar(5.0f, 5.0f, -40.0f); // Draw at local z=0
+            draw3DStar(20.0f, 5.0f, -40.0f); // Draw at local z=0
+            
+            if (traveling) {
+                travelT += travelSpeed * 0.016f;
+                if (travelT > 1.0f) {
+                    travelT = 1.0f;
+                    traveling = 0; // Stop at the end of this segment
 
-       // glDisableClientState(GL_VERTEX_ARRAY);
+                    // Move to next segment if possible
+                    if (nextWaypoint < NUM_WAYPOINTS - 1) {
+                        currentWaypoint = nextWaypoint;
+                        nextWaypoint++;
+                        travelT = 0.0f;
+                        traveling = 1; // Start traveling to next
+                    }
+                }
+                playerX = waypoints[currentWaypoint].x + (waypoints[nextWaypoint].x - waypoints[currentWaypoint].x) * travelT;
+                playerY = waypoints[currentWaypoint].y + (waypoints[nextWaypoint].y - waypoints[currentWaypoint].y) * travelT;
+                playerZ = waypoints[currentWaypoint].z + (waypoints[nextWaypoint].z - waypoints[currentWaypoint].z) * travelT;
+            }
+            drawBlockyPerson(playerX, playerY, playerZ, 0.1f);
+
+            // Then draw the pipe with depth mask off
+            glDepthMask(GL_FALSE);
+            drawPipeBetweenStars(0.0f, 0.0f, -25.0f, 0.0f, 0.0f, -10.0f);
+            drawPipeBetweenStars(5.0f, 5.0f, -40.0f, 0.0f, 0.0f, -25.0f);
+            drawPipeBetweenStars(20.0f, 5.0f, -40.0f, 5.0f, 5.0f, -40.0f);  
+            glDepthMask(GL_TRUE);
+        } 
+        else if (currentScene == SCENE_LAND) {
+           // glLoadIdentity();
+           // glTranslatef(0.0f, -5.0f, -25.0f); // Move camera up and back
+           // glRotatef(45, 1.0f, 0.0f, 0.0f);   // Tilt down to look at the land
+            drawLandMap();
+            drawStreet(0.0f, 0.0f, 40.0f, 2.0f); // y=0, z=0, length=40, width=2
+            //drawBuildingsOnLand();
+            drawBuildingWithWindows(0.0f, 5.0f, 0.0f, 2.0f, 10.0f, 5.0f, 0.2f, 0.2f, 0.6f, 0.6f, 0.6f); // Gray
+            drawBuildingWithWindows(5.0f, 2.5f, 5.0f, 2.0f, 5.0f, 2.0f, 0.2f, 0.2f, 0.8f, 0.5f, 0.2f);   // Brown
+            drawBuildingWithWindows(-5.0f, 7.5f, -5.0f, 2.0f, 15.0f, 2.0f, 0.2f, 0.2f, 0.3f, 0.3f, 0.7f); // Blue
+            drawBuildingWithWindows(10.0f, 3.0f, -10.0f, 1.0f, 6.0f, 1.0f, 0.2f, 0.2f, 0.8f, 0.8f, 0.2f); // Yellow
+            drawBuildingWithWindows(-10.0f, 4.0f, 10.0f, 1.5f, 8.0f, 1.5f, 0.2f, 0.2f, 0.0f, 0.0f, 0.0f); // Black
+
+            // Add some trees
+            // drawTree(2.0f, 0.0f, 2.0f, 7.0f, 0.2f, 0.8f);
+            // drawTree(-3.0f, 0.0f, -4.0f, 9.2f, 0.25f, 1.0f);
+            // drawTree(7.0f, 0.0f, -6.0f, 5.8f, 0.18f, 0.6f);
+
+            // Add some Christmas trees
+            drawChristmasTree(2.0f, 0.0f, 2.0f, 2.0f, 0.2f, 1.2f, 1.2f);
+            drawChristmasTree(-3.0f, 0.0f, -4.0f, 2.2f, 0.25f, 1.5f, 1.5f);
+            drawChristmasTree(7.0f, 0.0f, -6.0f, 1.8f, 0.18f, 1.0f, 1.0f);
+        }
+        // glDisableClientState(GL_VERTEX_ARRAY);
 
         SDL_GL_SwapWindow(window);
         static int iPrevTime = 0;

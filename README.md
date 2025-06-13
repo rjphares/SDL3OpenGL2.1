@@ -1,1 +1,1 @@
-# SDL3-OpenGL2.1
+# SDL3OpenGL2.1

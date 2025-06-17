@@ -303,7 +303,7 @@ Waypoint waypoints[NUM_WAYPOINTS] = {
     {0.0f, 0.0f, -10.0f},   // starA
     {0.0f, 0.0f, -25.0f},   // starB
     {5.0f, 5.0f, -40.0f},   // starC
-    {20.0f, 5.0f, -40.0f}   // starD
+    {-10.0f, 5.0f, -40.0f}   // starD
 };
 
 typedef enum {
@@ -643,7 +643,8 @@ int main() {
     CreateFBO(w, h, &fbo, &tex);    
     
     bool bForward=0 , bBackward=0, bLeft=0, bRight=0, bUp=0, bDown=0;
-    float playerX = 0.0f, playerY = 0.0f, playerZ = -9.0f;
+    bool doorOpen = false;
+    float playerX = 0.0f, playerY = 0.0f, playerZ = -7.0f;
     int currentWaypoint = 0;
     int nextWaypoint = 1;
     float travelT = 0.0f;
@@ -735,10 +736,11 @@ int main() {
             }
         }
 
-        BeginFBO( fbo , 0.15f ); //using a FBO cleared 33%
+        if (traveling) BeginFBO( fbo , 0.1f ); //using a FBO cleared 33%
+        else           BeginFBO( fbo , 1.0f ); //using a FBO cleared 33%
         
         //glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-        glClear( GL_DEPTH_BUFFER_BIT );
+        //glClear( GL_DEPTH_BUFFER_BIT );
                 
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
@@ -760,16 +762,76 @@ int main() {
         glClear( GL_DEPTH_BUFFER_BIT );
         
         //glTranslatef(-camX, -camY, -camZ);
-        glTranslatef(-playerX, -playerY, -playerZ);
+        //glTranslatef(-playerX, -playerY, -playerZ);
+        // --- Third-person camera setup ---
+        float camDistance = 2.5f; // How far behind the player
+        float camHeight   = 1.0f; // How much above the player
+
+        float yawRad = yaw * M_PI / 180.0f;
+        float camX3p = playerX - sinf(yawRad) * camDistance;
+        float camY3p = playerY + camHeight;
+        float camZ3p = playerZ + cosf(yawRad) * camDistance;
+
+        glLoadIdentity();
+
+        // Compute the direction vector from camera to player
+        float dirX = playerX - camX3p;
+        float dirY = playerY - camY3p;
+        float dirZ = playerZ - camZ3p;
+
+        // Compute the yaw and pitch needed to look at the player
+        float lookYaw = -atan2f(dirX, dirZ) * 180.0f / M_PI + 180.0f;
+        float lookPitch = -atan2f(dirY, sqrtf(dirX*dirX + dirZ*dirZ)) * 180.0f / M_PI;
+
+        // 1. Rotate to look at the player
+        glRotatef(lookPitch, 1.0f, 0.0f, 0.0f);
+        glRotatef(lookYaw,   0.0f, 1.0f, 0.0f);
+        // 2. Move to camera position
+        glTranslatef(-camX3p, -camY3p, -camZ3p);
         
         if (currentScene == SCENE_SPACE) {
         
-            draw3DStar(0.0f, 0.0f, -10.0f); // Draw at local z=0
-            draw3DStar(0.0f, 0.0f, -25.0f); // Draw at local z=0
-            draw3DStar(5.0f, 5.0f, -40.0f); // Draw at local z=0
-            draw3DStar(20.0f, 5.0f, -40.0f); // Draw at local z=0
+            for (int i = 0; i < NUM_WAYPOINTS; ++i) {
+                draw3DStar(waypoints[i].x, waypoints[i].y, waypoints[i].z); // Draw waypoints
+            }
             
-            if (traveling) {
+
+            //animate a door opening
+            static float doorAngle = 0.0f;
+
+            if (doorAngle > -90.0f) doorAngle -= 0.5f; // Increment angle
+            else    doorOpen = true; // Reset after full open
+            glPushMatrix();
+            glTranslatef(-.25f, 0.0f, -9.88f);      // Move to hinge position in world space
+            glRotatef(doorAngle, 0.0f, 1.0f, 0.0f); // Rotate around Y axis at hinge
+            glTranslatef(0.25f, 0.0f, 0.0f);      // Move so left edge is at hinge (half width)
+            glColor3f(0.5f, 0.25f, 0.1f);
+            drawCube(0.5f, 0.5f, 0.1f);           // Draw door centered at origin
+            glPopMatrix();
+            
+            // Draw circle portal effect at the door
+            glColor4f(0.2f, 0.8f, 1.0f, 1.0f); // Cyan glow 
+            glBegin(GL_POLYGON);
+            for (int i = 0; i < 64; ++i) {
+                float angle = (float)i / 64.0f * 2.0f * M_PI;
+                float x = cosf(angle) * 0.25f;
+                float y = sinf(angle) * 0.25f;
+                glVertex3f(x, y, -9.89f); // Draw in front of door
+            }
+            glEnd();
+            
+
+
+
+            //for (int i = 0; i < NUM_STARS; ++i) {
+            //    draw3DStar(stars[i].x, stars[i].y, stars[i].z);//, stars[i].size);
+           // }
+            // draw3DStar(0.0f, 0.0f, -10.0f); // Draw at local z=0
+            // draw3DStar(0.0f, 0.0f, -25.0f); // Draw at local z=0
+            // draw3DStar(5.0f, 5.0f, -40.0f); // Draw at local z=0
+            // draw3DStar(20.0f, 5.0f, -40.0f); // Draw at local z=0
+            
+            if (traveling && doorOpen) {
                 travelT += travelSpeed * 0.016f;
                 if (travelT > 1.0f) {
                     travelT = 1.0f;
@@ -783,9 +845,15 @@ int main() {
                         traveling = 1; // Start traveling to next
                     }
                 }
+                if (playerZ > waypoints[0].z) {
+                    playerZ -= 0.01f; // Move right
+                    travelT = 0.0f; // Reset travel time
+                }
+                else {
                 playerX = waypoints[currentWaypoint].x + (waypoints[nextWaypoint].x - waypoints[currentWaypoint].x) * travelT;
                 playerY = waypoints[currentWaypoint].y + (waypoints[nextWaypoint].y - waypoints[currentWaypoint].y) * travelT;
                 playerZ = waypoints[currentWaypoint].z + (waypoints[nextWaypoint].z - waypoints[currentWaypoint].z) * travelT;
+                }               
                 //set yaw and pitch based on direction to next waypoint
                 float dx = (waypoints[nextWaypoint].x - waypoints[currentWaypoint].x);
                 float dy = (waypoints[nextWaypoint].y - waypoints[currentWaypoint].y);
@@ -805,9 +873,15 @@ int main() {
 
             // Then draw the pipe with depth mask off
             glDepthMask(GL_FALSE);
-            drawPipeBetweenStars(0.0f, 0.0f, -25.0f, 0.0f, 0.0f, -10.0f);
-            drawPipeBetweenStars(5.0f, 5.0f, -40.0f, 0.0f, 0.0f, -25.0f);
-            drawPipeBetweenStars(20.0f, 5.0f, -40.0f, 5.0f, 5.0f, -40.0f);  
+            for (int i = 0; i < NUM_WAYPOINTS - 1; ++i) {
+                drawPipeBetweenStars(
+                    waypoints[i + 1].x, waypoints[i + 1].y, waypoints[i + 1].z,
+                    waypoints[i].x, waypoints[i].y, waypoints[i].z
+                );
+            }
+            // drawPipeBetweenStars(0.0f, 0.0f, -25.0f, 0.0f, 0.0f, -10.0f);
+            // drawPipeBetweenStars(5.0f, 5.0f, -40.0f, 0.0f, 0.0f, -25.0f);
+            // drawPipeBetweenStars(20.0f, 5.0f, -40.0f, 5.0f, 5.0f, -40.0f);  
             glDepthMask(GL_TRUE);
         } 
         else if (currentScene == SCENE_LAND) {
@@ -832,6 +906,7 @@ int main() {
             drawChristmasTree(2.0f, 0.0f, 2.0f, 2.0f, 0.2f, 1.2f, 1.2f);
             drawChristmasTree(-3.0f, 0.0f, -4.0f, 2.2f, 0.25f, 1.5f, 1.5f);
             drawChristmasTree(7.0f, 0.0f, -6.0f, 1.8f, 0.18f, 1.0f, 1.0f);
+
         }
         // glDisableClientState(GL_VERTEX_ARRAY);
 

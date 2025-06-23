@@ -578,7 +578,91 @@ void DrawFBO( int fboTex ) {
     glDisable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0); // Unbind texture
     glPopMatrix();
+}
 
+
+void drawBaseballWithCapsuleSeam(
+    float cx, float cy, float cz, float radius,
+    float capLat, float lon1, float lon2, int segments
+) {
+    // Draw the white sphere
+    int lats = 32, longs = 32;
+    glPushMatrix();
+    glTranslatef(cx, cy, cz);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    for (int i = 0; i <= lats; ++i) {
+        float lat0 = M_PI * (-0.5 + (float)(i - 1) / lats);
+        float z0  = sin(lat0);
+        float zr0 = cos(lat0);
+
+        float lat1s = M_PI * (-0.5 + (float)i / lats);
+        float z1 = sin(lat1s);
+        float zr1 = cos(lat1s);
+
+        glBegin(GL_QUAD_STRIP);
+        for (int j = 0; j <= longs; ++j) {
+            float lng = 2 * M_PI * (float)(j - 1) / longs;
+            float x = cos(lng);
+            float y = sin(lng);
+
+            glVertex3f(radius * x * zr0, radius * y * zr0, radius * z0);
+            glVertex3f(radius * x * zr1, radius * y * zr1, radius * z1);
+        }
+        glEnd();
+    }
+
+    // Draw the red capsule seam
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glLineWidth(2.0f);
+    glBegin(GL_LINE_LOOP);
+
+    // Top rounded end (cap) at +capLat, from lon1 to lon2
+    for (int i = 0; i <= segments; ++i) {
+        float t = (float)i / segments;
+        float theta = lon1 + t * (lon2 - lon1);
+        float phi = capLat;
+        float x = radius * cosf(phi) * cosf(theta);
+        float y = radius * sinf(phi);
+        float z = radius * cosf(phi) * sinf(theta);
+        glVertex3f(x, y, z);
+    }
+
+    // Right straight side: from +capLat to -capLat at lon2
+    for (int i = 1; i <= segments; ++i) {
+        float t = (float)i / segments;
+        float phi = capLat - t * (2 * capLat);
+        float theta = lon2;
+        float x = radius * cosf(phi) * cosf(theta);
+        float y = radius * sinf(phi);
+        float z = radius * cosf(phi) * sinf(theta);
+        glVertex3f(x, y, z);
+    }
+
+    // Bottom rounded end (cap) at -capLat, from lon2 to lon1
+    for (int i = 0; i <= segments; ++i) {
+        float t = (float)i / segments;
+        float theta = lon2 - t * (lon2 - lon1);
+        float phi = -capLat;
+        float x = radius * cosf(phi) * cosf(theta);
+        float y = radius * sinf(phi);
+        float z = radius * cosf(phi) * sinf(theta);
+        glVertex3f(x, y, z);
+    }
+
+    // Left straight side: from -capLat to +capLat at lon1
+    for (int i = 1; i <= segments; ++i) {
+        float t = (float)i / segments;
+        float phi = -capLat + t * (2 * capLat);
+        float theta = lon1;
+        float x = radius * cosf(phi) * cosf(theta);
+        float y = radius * sinf(phi);
+        float z = radius * cosf(phi) * sinf(theta);
+        glVertex3f(x, y, z);
+    }
+
+    glEnd();
+    glLineWidth(1.0f);
+    glPopMatrix();
 }
 
 int main() {
@@ -907,6 +991,22 @@ int main() {
             drawChristmasTree(-3.0f, 0.0f, -4.0f, 2.2f, 0.25f, 1.5f, 1.5f);
             drawChristmasTree(7.0f, 0.0f, -6.0f, 1.8f, 0.18f, 1.0f, 1.0f);
 
+            // rotate constantly and draw a baseball with a figure 8 seam
+            glPushMatrix();
+            glTranslatef(0.0f, 1.0f, -5.0f); // Move to a position above the ground
+            glRotatef(SDL_GetTicks() * 0.1f, 0.0f, 1.0f, 0.0f); // Rotate around Y axis
+            glRotatef(SDL_GetTicks() * 0.05f, 1.0f, 0.0f, 0.0f); // Rotate around X axis
+// Draw a pill seam centered at longitude 0, width 30°, height ±45°
+// Longer straight sides
+drawBaseballWithCapsuleSeam(
+    0, 0, 0, 1.0f,
+    M_PI/2 - M_PI/12,            // capLat (for long straight sides)
+    -2 * M_PI / 3, 2 * M_PI / 3, // 240° apart
+    100
+);
+          glPopMatrix();
+
+
         }
         // glDisableClientState(GL_VERTEX_ARRAY);
 
@@ -925,3 +1025,4 @@ int main() {
     SDL_Quit();
     return 0;
 }
+
